@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cosplay character identifier</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0e0e11; --panel: #14151a; --btn: #20222b; --fg: #e8e8ec; --dim: #9a9aa6;
+    --line: #2a2b33; --line-hi: #4a4b57;
+    --ok: #5ad17f; --ok-bg: #183223; --ok-fg: #b7f5c9; --no: #ff6b6b; --warn: #ffb648;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f5f5f7; --panel: #ffffff; --btn: #ececf1; --fg: #1c1c22; --dim: #666672;
+      --line: #dcdce3; --line-hi: #b4b4c0;
+      --ok: #1e8a4a; --ok-bg: #e2f4e9; --ok-fg: #157a3f; --no: #c62f2f; --warn: #9a5b00;
+    }
+  }
+  * { box-sizing: border-box }
+  html, body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  button {
+    background: var(--btn); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 7px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  button:hover { border-color: var(--line-hi) }
+  button:focus-visible, .dropzone:focus-visible { outline: 2px solid var(--ok); outline-offset: 2px }
+
+  .page { max-width: 760px; margin: 0 auto; padding: 40px 16px 96px }
+  h1 { font-weight: 600; font-size: 26px; letter-spacing: -0.01em; margin: 0 0 8px }
+  .subtitle { margin: 0 0 28px; max-width: 62ch; color: var(--dim); line-height: 1.55 }
+  .subtitle a { color: inherit }
+
+  .dropzone {
+    border: 2px dashed var(--line); border-radius: 10px; background: var(--panel);
+    padding: 44px 24px; text-align: center; cursor: pointer;
+    transition: border-color .15s ease, background-color .15s ease;
+  }
+  .dropzone:hover { border-color: var(--line-hi) }
+  .dropzone.dragover { border-color: var(--ok); background: var(--ok-bg) }
+  .dropzone svg { width: 26px; height: 26px; color: var(--dim); margin-bottom: 14px }
+  .dropzone p { margin: 0; font-size: 15px }
+  .dropzone .browse { color: var(--ok); text-decoration: underline; text-underline-offset: 3px }
+
+  #status { margin: 22px 2px 0; color: var(--dim); min-height: 20px }
+  #status.error { color: var(--no) }
+  .results { margin-top: 20px; display: flex; flex-direction: column; gap: 14px }
+
+  .card { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden }
+  .ribbon { width: 4px; flex-shrink: 0; background: var(--ok) }
+  .card.low .ribbon { background: var(--warn) }
+  .thumb-wrap { width: 116px; flex-shrink: 0; padding: 16px 10px 16px 16px }
+  .thumb { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); display: block }
+  .info { flex: 1; min-width: 0; padding: 18px 20px 18px 6px }
+  .filename { margin: 0 0 8px; font-size: 12px; color: var(--dim); word-break: break-all }
+  .name-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; margin-bottom: 4px }
+  .char-name { font-size: 20px; font-weight: 600; line-height: 1.3; color: var(--ok-fg) }
+  .card.low .char-name { color: var(--warn) }
+  .confidence { font-size: 13px; color: var(--dim) }
+  .note { margin: 0; font-size: 12.5px; color: var(--warn) }
+  .also-label { margin: 12px 0 6px; font-size: 12px; color: var(--dim) }
+  .also { display: flex; flex-direction: column; gap: 6px }
+  .also-row { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--dim) }
+  .also-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .bar { width: 72px; flex-shrink: 0; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden }
+  .bar div { height: 100%; background: var(--dim) }
+  .pct { width: 44px; flex-shrink: 0; text-align: right }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px }
+  .error-msg { color: var(--no); font-size: 13px }
+
+  @media (max-width: 420px) {
+    .card { flex-direction: column }
+    .thumb-wrap { width: auto; padding: 16px 16px 0 }
+    .thumb { aspect-ratio: 16 / 9 }
+    .info { padding: 12px 16px 18px }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Cosplay character identifier</h1>
+  <p class="subtitle" id="sub">Loading…</p>
+
+  <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Drop photos here, or press Enter to browse">
+    <input type="file" id="file-input" accept="image/*" multiple hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 4v11"/><path d="M7 9l5-5 5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+    </svg>
+    <p>Drop photos here, or <span class="browse">click to browse</span></p>
+  </div>
+
+  <div id="status" role="status"></div>
+  <div id="results" class="results"></div>
+</div>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+const resultsEl = document.getElementById('results');
+const statusEl = document.getElementById('status');
+const LENS_MAX_BYTES = 20 * 1024 * 1024;  // Google Lens refuses larger uploads
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pct = p => (p * 100).toFixed(1) + '%';
+
+fetch('/api/info').then(r => r.json()).then(d => {
+  document.getElementById('sub').innerHTML = `Names the character a cosplayer is dressed as, among ${d.characters} characters `
+    + `(on ${d.device === 'cuda' ? 'the graphics card' : 'the processor'}). Photos stay on this computer. `
+    + `Model and its accuracy: <a href="https://huggingface.co/GwenRB/cosplay-characters" target="_blank" rel="noopener">GwenRB/cosplay-characters</a>.`;
+});
+
+['dragenter', 'dragover'].forEach(t => dropzone.addEventListener(t, e => { e.preventDefault(); dropzone.classList.add('dragover'); }));
+['dragleave', 'dragend'].forEach(t => dropzone.addEventListener(t, e => { e.preventDefault(); dropzone.classList.remove('dragover'); }));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  handleFiles([...e.dataTransfer.files].filter(f => f.type.startsWith('image/')));
+});
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+});
+fileInput.addEventListener('change', () => { handleFiles([...fileInput.files]); fileInput.value = ''; });
+
+// One request per photo, so each card shows as soon as its photo is done.
+async function handleFiles(files) {
+  for (const [n, file] of files.entries()) {
+    setStatus(`Identifying ${n + 1} of ${files.length}…`);
+    let body;
+    try {
+      const res = await fetch('/api/identify', { method: 'POST', body: file });
+      body = await res.json().catch(() => ({ error: `the app answered ${res.status}` }));
+    } catch (err) {
+      setStatus(`The app isn't answering: is python app.py still running?`, true);
+      return;
+    }
+    render(file, body);
+  }
+  setStatus('');
+}
+
+function setStatus(text, error) {
+  statusEl.textContent = text;
+  statusEl.classList.toggle('error', !!error);
+}
+
+function render(file, result) {
+  const card = document.createElement('div');
+  const thumb = `<div class="thumb-wrap"><img class="thumb" src="${URL.createObjectURL(file)}" alt=""></div>`;
+  if (result.error) {
+    card.className = 'card low';
+    card.innerHTML = `<div class="ribbon"></div>${thumb}<div class="info"><p class="filename">${esc(file.name)}</p>`
+      + `<p class="error-msg">${esc(result.error)}</p></div>`;
+    resultsEl.prepend(card);
+    return;
+  }
+  const [best, ...rest] = result.guesses;
+  const low = best.prob < 0.5;
+  card.className = 'card' + (low ? ' low' : '');
+  card.innerHTML = `<div class="ribbon"></div>${thumb}<div class="info">
+      <p class="filename">${esc(file.name)}</p>
+      <div class="name-row"><span class="char-name">${esc(best.name)}</span><span class="confidence">${pct(best.prob)}</span></div>
+      ${low ? '<p class="note">Not sure: under 50%. Out of costume, or a character it doesn\'t know?</p>' : ''}
+      <p class="also-label">Also considered</p>
+      <div class="also">${rest.map(g => `<div class="also-row"><span class="name">${esc(g.name)}</span>`
+        + `<div class="bar"><div style="width:${(g.prob * 100).toFixed(1)}%"></div></div><span class="pct">${pct(g.prob)}</span></div>`).join('')}</div>
+      <div class="actions">
+        <button type="button" class="lens">Search with Google Lens</button>
+        <button type="button" class="look">Look up ${esc(best.name)}</button>
+      </div>
+    </div>`;
+  card.querySelector('.lens').addEventListener('click', () => lens(file));
+  card.querySelector('.look').addEventListener('click', () => {
+    const q = (best.name.replace(/[()]/g, ' ') + ' character').replace(/\s+/g, ' ').trim();
+    window.open('https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(q), '_blank', 'noopener');
+  });
+  resultsEl.prepend(card);
+}
+
+// Sends the photo to Google Lens in a new tab, as Chrome's own "Search with
+// Google Lens" does: a real form post, kept synchronous inside the click, or
+// the browser blocks the new tab as a popup.
+function lens(file) {
+  if (file.size > LENS_MAX_BYTES) { setStatus('Google Lens only takes photos up to 20 MB', true); return; }
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.enctype = 'multipart/form-data';
+  form.action = `https://lens.google.com/v3/upload?ep=ccm&s=&st=${Date.now()}`;
+  form.target = '_blank';
+  form.hidden = true;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.name = 'encoded_image';
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  input.files = dt.files;
+  form.append(input);
+  document.body.append(form);
+  form.submit();
+  form.remove();
+}
+</script>
+</body>
+</html>
